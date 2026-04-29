@@ -76,7 +76,11 @@ import { ISelectedAccountController } from '@/interfaces/selectedAccount'
 import { ISignAccountOpController } from '@/interfaces/signAccountOp'
 import { ISignMessageController, SignMessageStatus } from '@/interfaces/signMessage'
 import { IStorageController, Storage } from '@/interfaces/storage'
-import { ISwapAndBridgeController, SwapAndBridgeActiveRoute } from '@/interfaces/swapAndBridge'
+import {
+  ISwapAndBridgeController,
+  SwapAndBridgeActiveRoute,
+  SwapProvider
+} from '@/interfaces/swapAndBridge'
 import { ITransactionManagerController } from '@/interfaces/transactionManager'
 import { ITransferController } from '@/interfaces/transfer'
 import { IUiController, UiManager, View } from '@/interfaces/ui'
@@ -93,6 +97,7 @@ import { isNetworkReady } from '@/libs/selectedAccount/selectedAccount'
 import { LiFiAPI } from '@/services/lifi/api'
 import { paymasterFactory } from '@/services/paymaster'
 import { SocketAPI } from '@/services/socket/api'
+import { InteropSwapProvider } from '@/services/interop/interopSwapProvider'
 import { SwapProviderParallelExecutor } from '@/services/swapIntegrators/swapProviderParallelExecutor'
 import { getHdPathFromTemplate } from '@/utils/hdPath'
 import wait from '@/utils/wait'
@@ -389,6 +394,14 @@ export class MainController extends EventEmitter implements IMainController {
     )
     const LiFiProvider = new LiFiAPI({ fetch, apiKey: liFiApiKey })
     const SocketProvider = new SocketAPI({ fetch, apiKey: bungeeApiKey })
+
+    let swapProvider: SwapProvider
+    if (this.featureFlags.isFeatureEnabled('useInteropSdk')) {
+      swapProvider = new InteropSwapProvider()
+    } else {
+      swapProvider = new SwapProviderParallelExecutor([LiFiProvider, SocketProvider])
+    }
+
     this.swapAndBridge = new SwapAndBridgeController({
       eventEmitterRegistry,
       callRelayer: this.callRelayer,
@@ -402,7 +415,7 @@ export class MainController extends EventEmitter implements IMainController {
       activity: this.activity,
       storage: this.storage,
       phishing: this.phishing,
-      swapProvider: new SwapProviderParallelExecutor([LiFiProvider, SocketProvider]),
+      swapProvider,
       relayerUrl,
       portfolioUpdate: (chainsToUpdate: Network['chainId'][]) => {
         if (chainsToUpdate.length) {
