@@ -1,10 +1,13 @@
+import { getAddress } from 'ethers'
+
 import {
   createAggregator,
   createCrossChainProvider,
   OrderTrackerFactory,
   PROTOCOLS,
   LIFI_INTENTS_ORDER_SERVER_URL,
-  type Aggregator
+  type Aggregator,
+  type DiscoveredAssets
 } from '@wonderland/interop-cross-chain'
 
 import {
@@ -37,6 +40,8 @@ export class InteropSwapProvider implements SwapProvider {
 
   private aggregator: Aggregator
 
+  private discoveredAssets: DiscoveredAssets | null = null
+
   constructor() {
     const providers = [
       createCrossChainProvider(PROTOCOLS.LIFI_INTENTS, {
@@ -62,25 +67,73 @@ export class InteropSwapProvider implements SwapProvider {
     this.isHealthy = null
   }
 
-  // Implemented in EFI-892
+  /**
+   * Returns the chains supported by the SDK's underlying providers.
+   * Derived from the keys of the asset discovery response.
+   */
   async getSupportedChains(): Promise<SwapAndBridgeSupportedChain[]> {
-    return []
+    const assets = await this.getDiscoveredAssets()
+    const chains = Object.keys(assets.tokensByChain).map((chainId) => ({
+      chainId: Number(chainId)
+    }))
+    this.supportedChains = chains
+    return chains
   }
 
-  // Implemented in EFI-892
-  async getToTokenList(_params: {
+  /**
+   * Returns the tokens available on `toChainId`. The `fromChainId` is
+   * accepted for interface compatibility but ignored — the SDK validates
+   * route feasibility at quote time, not from the token list.
+   */
+  async getToTokenList({
+    toChainId
+  }: {
     fromChainId: number
     toChainId: number
   }): Promise<SwapAndBridgeToToken[]> {
-    return []
+    const assets = await this.getDiscoveredAssets()
+    const addresses = assets.tokensByChain[toChainId] ?? []
+    const metadata = assets.tokenMetadata[toChainId] ?? {}
+
+    return addresses.reduce<SwapAndBridgeToToken[]>((tokens, addr) => {
+      const info = metadata[addr]
+      if (!info?.symbol) return tokens
+      tokens.push({
+        symbol: info.symbol,
+        name: info.symbol,
+        chainId: toChainId,
+        address: safeGetAddress(info.address),
+        icon: '',
+        decimals: info.decimals
+      })
+      return tokens
+    }, [])
   }
 
-  // Implemented in EFI-892
-  async getToken(_params: {
+  /**
+   * Looks up a single token by address and chain in the discovered assets.
+   * Returns null when not found, matching how the parallel executor expects
+   * providers to behave when they don't recognize a token.
+   */
+  async getToken({
+    address,
+    chainId
+  }: {
     address: string
     chainId: number
   }): Promise<SwapAndBridgeToToken | null> {
-    return null
+    const assets = await this.getDiscoveredAssets()
+    const info = assets.tokenMetadata[chainId]?.[address.toLowerCase()]
+    if (!info) return null
+
+    return {
+      symbol: info.symbol,
+      name: info.symbol,
+      chainId,
+      address: safeGetAddress(info.address),
+      icon: '',
+      decimals: info.decimals
+    }
   }
 
   // Implemented in EFI-893
@@ -110,5 +163,20 @@ export class InteropSwapProvider implements SwapProvider {
     providerId: string
   }): Promise<SwapAndBridgeRouteStatus> {
     return null
+  }
+
+  private async getDiscoveredAssets(): Promise<DiscoveredAssets> {
+    if (!this.discoveredAssets) {
+      this.discoveredAssets = await this.aggregator.discoverAssets()
+    }
+    return this.discoveredAssets
+  }
+}
+
+function safeGetAddress(address: string): string {
+  try {
+    return getAddress(address)
+  } catch {
+    return address
   }
 }
