@@ -1,0 +1,23 @@
+name: Interop adapter tests
+
+on:
+  pull_request:
+    branches: [feat/interop-sdk]
+  push:
+    branches: [feat/interop-sdk]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx eslint src/services/interop/ src/consts/featureFlags.ts src/controllers/main/main.ts
+      - run: npx jest src/services/interop/ --passWithNoTests
