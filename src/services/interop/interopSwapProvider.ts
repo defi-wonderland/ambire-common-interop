@@ -1,8 +1,10 @@
 import { getAddress } from 'ethers'
+import { Hex } from 'viem'
 
 import {
   createAggregator,
   createCrossChainProvider,
+  OrderStatus,
   OrderTrackerFactory,
   PROTOCOLS,
   LIFI_INTENTS_ORDER_SERVER_URL,
@@ -20,6 +22,18 @@ import {
   SwapAndBridgeToToken,
   SwapProvider
 } from '../../interfaces/swapAndBridge'
+
+const ORDER_STATUS_TO_ROUTE_STATUS: Record<OrderStatus, SwapAndBridgeRouteStatus> = {
+  [OrderStatus.Finalized]: 'completed',
+  [OrderStatus.Failed]: 'refunded',
+  [OrderStatus.Refunded]: 'refunded',
+  [OrderStatus.Created]: null,
+  [OrderStatus.Pending]: null,
+  [OrderStatus.Executed]: null,
+  [OrderStatus.Settled]: null,
+  [OrderStatus.Executing]: null,
+  [OrderStatus.Settling]: null
+}
 
 /**
  * SwapProvider adapter that routes cross-chain operations through the
@@ -154,15 +168,28 @@ export class InteropSwapProvider implements SwapProvider {
     throw new Error('Not implemented')
   }
 
-  // Implemented in EFI-895
-  async getRouteStatus(_params: {
+  async getRouteStatus({
+    txHash,
+    fromChainId,
+    toChainId,
+    providerId
+  }: {
     txHash: string
     fromChainId: number
     toChainId: number
     bridge?: string
     providerId: string
   }): Promise<SwapAndBridgeRouteStatus> {
-    return null
+    try {
+      const order = await this.aggregator.getOrderStatus({
+        txHash: txHash as Hex,
+        providerId,
+        originChainId: fromChainId
+      })
+      return ORDER_STATUS_TO_ROUTE_STATUS[order.status]
+    } catch {
+      return null
+    }
   }
 
   private async getDiscoveredAssets(): Promise<DiscoveredAssets> {
