@@ -218,5 +218,4 @@ export class InteropSwapProvider implements SwapProvider {
       return null
     }
   }
-
 }
