@@ -13,5 +13,5 @@ export const defaultFeatureFlags: FeatureFlags = {
   withContinuousUpdatesController: true,
   testnetMode: false,
   tokenAndDefiAutoDiscovery: true,
-  useInteropSdk: false
+  useInteropSdk: true
 }
