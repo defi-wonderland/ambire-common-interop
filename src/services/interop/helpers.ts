@@ -14,6 +14,7 @@ import {
   SwapAndBridgeRoute,
   SwapAndBridgeToToken
 } from '../../interfaces/swapAndBridge'
+import { generateUuid } from '../../utils/uuid'
 
 export function toSwapAndBridgeToken(
   info: DiscoveredAssetInfo,
@@ -85,7 +86,7 @@ export function mapQuoteToRoute(
 
   return {
     providerId: 'interop',
-    routeId: quote.quoteId ?? crypto.randomUUID(),
+    routeId: quote.quoteId ?? generateUuid(),
     currentUserTxIndex: 0,
     fromChainId: params.fromChainId,
     toChainId: params.toChainId,
