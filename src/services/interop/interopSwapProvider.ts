@@ -171,7 +171,6 @@ export class InteropSwapProvider implements SwapProvider {
   async getRouteStatus({
     txHash,
     fromChainId,
-    toChainId,
     providerId
   }: {
     txHash: string
