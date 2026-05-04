@@ -22,7 +22,7 @@ import {
   SwapAndBridgeToToken,
   SwapProvider
 } from '../../interfaces/swapAndBridge'
-import { getUsdPrice, mapQuoteToRoute, toSwapAndBridgeToken } from './helpers'
+import { mapQuoteToRoute, toSwapAndBridgeToken } from './helpers'
 
 const ORDER_STATUS_TO_ROUTE_STATUS: Record<OrderStatus, SwapAndBridgeRouteStatus> = {
   [OrderStatus.Finalized]: 'completed',
@@ -174,19 +174,10 @@ export class InteropSwapProvider implements SwapProvider {
       decimals: 18
     }
 
-    const fromPriceUsd = getUsdPrice(params.fromAsset)
-    const firstRoute = mapQuoteToRoute(
-      firstQuote,
-      fromAssetToken,
-      toAssetToken,
-      params,
-      fromPriceUsd
-    )
+    const firstRoute = mapQuoteToRoute(firstQuote, fromAssetToken, toAssetToken, params)
     const routes = [
       firstRoute,
-      ...restQuotes.map((q) =>
-        mapQuoteToRoute(q, fromAssetToken, toAssetToken, params, fromPriceUsd)
-      )
+      ...restQuotes.map((q) => mapQuoteToRoute(q, fromAssetToken, toAssetToken, params))
     ]
 
     return {

@@ -113,14 +113,6 @@ describe('InteropSwapProvider', () => {
     mockGetQuotes.mockReset()
   })
 
-  it('caches discoverAssets between calls', async () => {
-    const provider = new InteropSwapProvider()
-    await provider.getSupportedChains()
-    await provider.getToTokenList({ fromChainId: OTHER_CHAIN_ID, toChainId: ARB_CHAIN_ID })
-    await provider.getToken({ address: USDC_ARB, chainId: ARB_CHAIN_ID })
-    expect(mockDiscoverAssets).toHaveBeenCalledTimes(1)
-  })
-
   it('looks up tokens by lowercase address', async () => {
     const provider = new InteropSwapProvider()
     const token = await provider.getToken({

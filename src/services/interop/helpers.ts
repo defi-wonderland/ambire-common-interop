@@ -1,5 +1,5 @@
 import { Token as LiFiToken } from '@lifi/types'
-import { formatUnits, getAddress } from 'ethers'
+import { getAddress } from 'ethers'
 
 import {
   getSignatureSteps,
@@ -29,11 +29,6 @@ export function toSwapAndBridgeToken(
   }
 }
 
-export function getUsdPrice(asset: ProviderQuoteParams['fromAsset']): number {
-  const usd = asset?.priceIn?.find((p: { baseCurrency: string }) => p.baseCurrency === 'usd')
-  return usd?.price ?? 0
-}
-
 /**
  * Ambire's SwapAndBridgeRoute models a single fromAsset/toAsset, while the SDK
  * schema allows multi-input/output quotes (for future Universal Balance flows).
@@ -54,12 +49,10 @@ export function mapQuoteToRoute(
   quote: ExecutableQuote,
   fromAsset: SwapAndBridgeToToken,
   toAsset: SwapAndBridgeToToken,
-  params: ProviderQuoteParams,
-  fromPriceUsd: number
+  params: ProviderQuoteParams
 ): SwapAndBridgeRoute {
   const { input, output } = getSinglePreviewIO(quote)
   const isSameChain = params.fromChainId === params.toChainId
-  const inputValueInUsd = Number(formatUnits(input.amount, fromAsset.decimals)) * fromPriceUsd
 
   const sendSteps = getTransactionSteps(quote.order).filter((s) => !isApprovalStep(s))
   const sigSteps = getSignatureSteps(quote.order)
@@ -122,10 +115,15 @@ export function mapQuoteToRoute(
         userTxIndex: 0
       }
     ],
-    inputValueInUsd,
-    // EFI-888: SDK doesn't expose output USD yet — sorting by output USD
-    // falls through to serviceTime tiebreaker until then.
-    outputValueInUsd: 0,
+    // Pass undefined through when the SDK doesn't have a USD value for this
+    // input/output, instead of displaying a misleading $0. The downstream UI
+    // components handle undefined with their own `|| 0` fallback.
+    inputValueInUsd: (input.amountUsd === undefined
+      ? undefined
+      : Number(input.amountUsd)) as unknown as number,
+    outputValueInUsd: (output.amountUsd === undefined
+      ? undefined
+      : Number(output.amountUsd)) as unknown as number,
     serviceTime: quote.eta ?? 0,
     rawRoute: '' as never,
     toToken,
