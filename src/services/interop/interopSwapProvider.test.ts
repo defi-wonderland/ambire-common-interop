@@ -199,6 +199,7 @@ describe('InteropSwapProvider', () => {
       const result = await provider.quote(buildQuoteParams())
       const [route] = result.routes
       if (!route) throw new Error('expected at least one route')
+      expect(route.providerId).toBe('bungee')
       expect(route.txData).toEqual({
         data: TX_DATA,
         to: SPENDER_ADDRESS,

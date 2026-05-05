@@ -85,7 +85,10 @@ export function mapQuoteToRoute(
   }
 
   return {
-    providerId: 'interop',
+    // The SDK provider id ('lifi-intents', 'bungee', ...). Ambire's controller
+    // forwards this back to getRouteStatus(), so it has to be a value the SDK
+    // aggregator recognizes — not our adapter id.
+    providerId: quote._providerId,
     routeId: quote.quoteId ?? generateUuid(),
     currentUserTxIndex: 0,
     fromChainId: params.fromChainId,
