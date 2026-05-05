@@ -1,4 +1,3 @@
-import { getAddress } from 'ethers'
 import { Hex } from 'viem'
 
 import {
@@ -9,9 +8,10 @@ import {
   PROTOCOLS,
   LIFI_INTENTS_ORDER_SERVER_URL,
   type Aggregator,
-  type DiscoveredAssets
+  type QuoteRequest
 } from '@wonderland/interop-cross-chain'
 
+import SwapAndBridgeProviderApiError from '../../classes/SwapAndBridgeProviderApiError'
 import {
   ProviderQuoteParams,
   SwapAndBridgeQuote,
@@ -22,6 +22,7 @@ import {
   SwapAndBridgeToToken,
   SwapProvider
 } from '../../interfaces/swapAndBridge'
+import { mapQuoteToRoute, toSwapAndBridgeToken } from './helpers'
 
 const ORDER_STATUS_TO_ROUTE_STATUS: Record<OrderStatus, SwapAndBridgeRouteStatus> = {
   [OrderStatus.Finalized]: 'completed',
@@ -36,11 +37,8 @@ const ORDER_STATUS_TO_ROUTE_STATUS: Record<OrderStatus, SwapAndBridgeRouteStatus
 }
 
 /**
- * SwapProvider adapter that routes cross-chain operations through the
- * interop SDK's Aggregator. Implements Ambire's SwapProvider interface
- * so it can replace the existing LiFi + Socket parallel executor when
- * the useInteropSdk feature flag is enabled.
- *
+ * SwapProvider adapter for the interop SDK's Aggregator. Replaces the LiFi +
+ * Socket parallel executor when the useInteropSdk feature flag is enabled.
  * Uses LiFi Intents and Bungee as underlying providers via the SDK.
  */
 export class InteropSwapProvider implements SwapProvider {
@@ -53,8 +51,6 @@ export class InteropSwapProvider implements SwapProvider {
   supportedChains: SwapAndBridgeSupportedChain[] | null = null
 
   private aggregator: Aggregator
-
-  private discoveredAssets: DiscoveredAssets | null = null
 
   constructor() {
     const providers = [
@@ -86,7 +82,7 @@ export class InteropSwapProvider implements SwapProvider {
    * Derived from the keys of the asset discovery response.
    */
   async getSupportedChains(): Promise<SwapAndBridgeSupportedChain[]> {
-    const assets = await this.getDiscoveredAssets()
+    const assets = await this.aggregator.discoverAssets()
     const chains = Object.keys(assets.tokensByChain).map((chainId) => ({
       chainId: Number(chainId)
     }))
@@ -94,41 +90,24 @@ export class InteropSwapProvider implements SwapProvider {
     return chains
   }
 
-  /**
-   * Returns the tokens available on `toChainId`. The `fromChainId` is
-   * accepted for interface compatibility but ignored — the SDK validates
-   * route feasibility at quote time, not from the token list.
-   */
   async getToTokenList({
     toChainId
   }: {
     fromChainId: number
     toChainId: number
   }): Promise<SwapAndBridgeToToken[]> {
-    const assets = await this.getDiscoveredAssets()
+    const assets = await this.aggregator.discoverAssets()
     const addresses = assets.tokensByChain[toChainId] ?? []
     const metadata = assets.tokenMetadata[toChainId] ?? {}
 
     return addresses.reduce<SwapAndBridgeToToken[]>((tokens, addr) => {
       const info = metadata[addr]
       if (!info?.symbol) return tokens
-      tokens.push({
-        symbol: info.symbol,
-        name: info.symbol,
-        chainId: toChainId,
-        address: safeGetAddress(info.address),
-        icon: '',
-        decimals: info.decimals
-      })
+      tokens.push(toSwapAndBridgeToken(info, toChainId))
       return tokens
     }, [])
   }
 
-  /**
-   * Looks up a single token by address and chain in the discovered assets.
-   * Returns null when not found, matching how the parallel executor expects
-   * providers to behave when they don't recognize a token.
-   */
   async getToken({
     address,
     chainId
@@ -136,30 +115,79 @@ export class InteropSwapProvider implements SwapProvider {
     address: string
     chainId: number
   }): Promise<SwapAndBridgeToToken | null> {
-    const assets = await this.getDiscoveredAssets()
+    const assets = await this.aggregator.discoverAssets()
     const info = assets.tokenMetadata[chainId]?.[address.toLowerCase()]
     if (!info) return null
 
-    return {
-      symbol: info.symbol,
-      name: info.symbol,
-      chainId,
-      address: safeGetAddress(info.address),
-      icon: '',
-      decimals: info.decimals
-    }
+    return toSwapAndBridgeToken(info, chainId)
   }
 
-  // Implemented in EFI-893
-  async quote(_params: ProviderQuoteParams): Promise<SwapAndBridgeQuote> {
+  /**
+   * Attaches txData/approvalData to each route so startRoute() can read them
+   * without a second API call (Socket pattern).
+   */
+  async quote(params: ProviderQuoteParams): Promise<SwapAndBridgeQuote> {
+    const request: QuoteRequest = {
+      user: params.userAddress,
+      input: {
+        chainId: params.fromChainId,
+        assetAddress: params.fromTokenAddress,
+        amount: params.fromAmount.toString()
+      },
+      output: {
+        chainId: params.toChainId,
+        assetAddress: params.toTokenAddress
+      }
+    }
+
+    let result
+    try {
+      result = await this.aggregator.getQuotes(request)
+    } catch (e) {
+      throw new SwapAndBridgeProviderApiError(e instanceof Error ? e.message : String(e))
+    }
+
+    const { quotes, errors } = result
+    const [firstQuote, ...restQuotes] = quotes
+    if (!firstQuote) {
+      throw new SwapAndBridgeProviderApiError(errors[0]?.errorMsg ?? 'No routes available')
+    }
+
+    if (!params.fromAsset) {
+      throw new SwapAndBridgeProviderApiError('Missing fromAsset for quote')
+    }
+
+    const fromAssetToken: SwapAndBridgeToToken = {
+      symbol: params.fromAsset.symbol,
+      name: params.fromAsset.symbol,
+      chainId: params.fromChainId,
+      address: params.fromTokenAddress,
+      icon: '',
+      decimals: params.fromAsset.decimals
+    }
+    const toAssetToken: SwapAndBridgeToToken = params.toAsset ?? {
+      symbol: '',
+      name: '',
+      chainId: params.toChainId,
+      address: params.toTokenAddress,
+      icon: '',
+      decimals: 18
+    }
+
+    const firstRoute = mapQuoteToRoute(firstQuote, fromAssetToken, toAssetToken, params)
+    const routes = [
+      firstRoute,
+      ...restQuotes.map((q) => mapQuoteToRoute(q, fromAssetToken, toAssetToken, params))
+    ]
+
     return {
-      fromAsset: { symbol: '', name: '', chainId: 0, address: '', decimals: 0 },
-      fromChainId: 0,
-      toAsset: { symbol: '', name: '', chainId: 0, address: '', decimals: 0 },
-      toChainId: 0,
+      fromAsset: fromAssetToken,
+      fromChainId: params.fromChainId,
+      toAsset: toAssetToken,
+      toChainId: params.toChainId,
       selectedRoute: undefined,
-      selectedRouteSteps: [],
-      routes: []
+      selectedRouteSteps: firstRoute.steps,
+      routes
     }
   }
 
@@ -189,20 +217,5 @@ export class InteropSwapProvider implements SwapProvider {
     } catch {
       return null
     }
-  }
-
-  private async getDiscoveredAssets(): Promise<DiscoveredAssets> {
-    if (!this.discoveredAssets) {
-      this.discoveredAssets = await this.aggregator.discoverAssets()
-    }
-    return this.discoveredAssets
-  }
-}
-
-function safeGetAddress(address: string): string {
-  try {
-    return getAddress(address)
-  } catch {
-    return address
   }
 }
