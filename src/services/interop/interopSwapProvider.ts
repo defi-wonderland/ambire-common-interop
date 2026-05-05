@@ -191,9 +191,33 @@ export class InteropSwapProvider implements SwapProvider {
     }
   }
 
-  // Implemented in EFI-894
-  async startRoute(_route: SwapAndBridgeRoute): Promise<SwapAndBridgeSendTxRequest> {
-    throw new Error('Not implemented')
+  /**
+   * Reads the tx data and approval requirements that were attached during
+   * quote() (Socket pattern), so this is a pure mapping and never makes a
+   * second SDK call.
+   */
+  async startRoute(route: SwapAndBridgeRoute): Promise<SwapAndBridgeSendTxRequest> {
+    if (!route.txData) {
+      throw new SwapAndBridgeProviderApiError(
+        'Route is missing txData; signature-only quotes are rejected at quote time'
+      )
+    }
+    return {
+      activeRouteId: route.routeId,
+      approvalData: route.approvalData
+        ? {
+            allowanceTarget: route.approvalData.spenderAddress,
+            approvalTokenAddress: route.approvalData.tokenAddress,
+            minimumApprovalAmount: route.approvalData.amount,
+            owner: route.approvalData.userAddress
+          }
+        : null,
+      chainId: route.txData.chainId,
+      txData: route.txData.data,
+      txTarget: route.txData.to,
+      userTxIndex: 0,
+      value: route.txData.value
+    }
   }
 
   async getRouteStatus({

@@ -213,4 +213,71 @@ describe('InteropSwapProvider', () => {
       })
     })
   })
+
+  describe('startRoute', () => {
+    const baseRoute = {
+      providerId: 'interop',
+      routeId: 'quote-1',
+      currentUserTxIndex: 0,
+      fromChainId: BASE_CHAIN_ID,
+      toChainId: ARB_CHAIN_ID,
+      userAddress: USER_ADDRESS,
+      isOnlySwapRoute: false,
+      fromAmount: INPUT_AMOUNT,
+      toAmount: OUTPUT_AMOUNT,
+      userTxs: [],
+      steps: [],
+      inputValueInUsd: 0,
+      outputValueInUsd: 0,
+      serviceTime: 0,
+      rawRoute: '' as never,
+      toToken: { address: USDC_ARB, chainId: ARB_CHAIN_ID } as any,
+      disabled: false,
+      withConvenienceFee: false,
+      txData: {
+        data: TX_DATA,
+        to: SPENDER_ADDRESS,
+        value: '0',
+        chainId: BASE_CHAIN_ID
+      },
+      approvalData: {
+        amount: INPUT_AMOUNT,
+        tokenAddress: USDC_BASE,
+        spenderAddress: SPENDER_ADDRESS,
+        userAddress: USER_ADDRESS
+      }
+    } as any
+
+    it('maps txData and approvalData to a SwapAndBridgeSendTxRequest', async () => {
+      const provider = new InteropSwapProvider()
+      const result = await provider.startRoute(baseRoute)
+      expect(result).toEqual({
+        activeRouteId: 'quote-1',
+        approvalData: {
+          allowanceTarget: SPENDER_ADDRESS,
+          approvalTokenAddress: USDC_BASE,
+          minimumApprovalAmount: INPUT_AMOUNT,
+          owner: USER_ADDRESS
+        },
+        chainId: BASE_CHAIN_ID,
+        txData: TX_DATA,
+        txTarget: SPENDER_ADDRESS,
+        userTxIndex: 0,
+        value: '0'
+      })
+    })
+
+    it('returns approvalData null when the route has no allowance attached', async () => {
+      const provider = new InteropSwapProvider()
+      const route = { ...baseRoute, approvalData: undefined }
+      const result = await provider.startRoute(route)
+      expect(result.approvalData).toBeNull()
+    })
+
+    it('throws when txData is missing on the route', async () => {
+      const provider = new InteropSwapProvider()
+      const route = { ...baseRoute, txData: undefined }
+      await expect(provider.startRoute(route)).rejects.toThrow(/missing txData/)
+    })
+  })
 })
