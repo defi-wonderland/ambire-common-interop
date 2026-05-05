@@ -97,9 +97,6 @@ export function mapQuoteToRoute(
     isOnlySwapRoute: isSameChain,
     fromAmount: input.amount,
     toAmount: output.amount,
-    // Carries the SDK provider id through to getRouteStatus() via the
-    // bridge param of the route status check.
-    usedBridgeNames: [quote._providerId],
     userTxs: [],
     sender: params.userAddress,
     steps: [
