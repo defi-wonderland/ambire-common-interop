@@ -18,8 +18,7 @@ import { generateUuid } from '../../utils/uuid'
 
 // Ambire's UI keys the Bungee icon off the legacy 'socket' provider id. Map
 // it for display, reverse it before forwarding back to the SDK aggregator.
-export const toAmbireProviderId = (sdkId: string): string =>
-  sdkId === 'bungee' ? 'socket' : sdkId
+export const toAmbireProviderId = (sdkId: string): string => (sdkId === 'bungee' ? 'socket' : sdkId)
 
 export const toSdkProviderId = (ambireId: string): string =>
   ambireId === 'socket' ? 'bungee' : ambireId
