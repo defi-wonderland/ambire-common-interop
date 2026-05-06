@@ -199,7 +199,8 @@ describe('InteropSwapProvider', () => {
       const result = await provider.quote(buildQuoteParams())
       const [route] = result.routes
       if (!route) throw new Error('expected at least one route')
-      expect(route.providerId).toBe('bungee')
+      // bungee is mapped to 'socket' so Ambire's UI keys the icon off the legacy id.
+      expect(route.providerId).toBe('socket')
       expect(route.txData).toEqual({
         data: TX_DATA,
         to: SPENDER_ADDRESS,

@@ -16,6 +16,14 @@ import {
 } from '../../interfaces/swapAndBridge'
 import { generateUuid } from '../../utils/uuid'
 
+// Ambire's UI keys the Bungee icon off the legacy 'socket' provider id. Map
+// it for display, reverse it before forwarding back to the SDK aggregator.
+export const toAmbireProviderId = (sdkId: string): string =>
+  sdkId === 'bungee' ? 'socket' : sdkId
+
+export const toSdkProviderId = (ambireId: string): string =>
+  ambireId === 'socket' ? 'bungee' : ambireId
+
 export function toSwapAndBridgeToken(
   info: DiscoveredAssetInfo,
   chainId: number
@@ -85,10 +93,7 @@ export function mapQuoteToRoute(
   }
 
   return {
-    // The SDK provider id ('lifi-intents', 'bungee', ...). Ambire's controller
-    // forwards this back to getRouteStatus(), so it has to be a value the SDK
-    // aggregator recognizes — not our adapter id.
-    providerId: quote._providerId,
+    providerId: toAmbireProviderId(quote._providerId),
     routeId: quote.quoteId ?? generateUuid(),
     currentUserTxIndex: 0,
     fromChainId: params.fromChainId,

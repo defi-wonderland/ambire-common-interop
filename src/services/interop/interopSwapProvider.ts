@@ -22,7 +22,7 @@ import {
   SwapAndBridgeToToken,
   SwapProvider
 } from '../../interfaces/swapAndBridge'
-import { mapQuoteToRoute, toSwapAndBridgeToken } from './helpers'
+import { mapQuoteToRoute, toSdkProviderId, toSwapAndBridgeToken } from './helpers'
 
 const ORDER_STATUS_TO_ROUTE_STATUS: Record<OrderStatus, SwapAndBridgeRouteStatus> = {
   [OrderStatus.Finalized]: 'completed',
@@ -234,7 +234,7 @@ export class InteropSwapProvider implements SwapProvider {
     try {
       const order = await this.aggregator.getOrderStatus({
         txHash: txHash as Hex,
-        providerId,
+        providerId: toSdkProviderId(providerId),
         originChainId: fromChainId
       })
       return ORDER_STATUS_TO_ROUTE_STATUS[order.status]

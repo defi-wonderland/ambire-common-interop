@@ -25,6 +25,7 @@ import {
   SwapAndBridgeUserTx
 } from '../../interfaces/swapAndBridge'
 import { CallsUserRequest } from '../../interfaces/userRequest'
+import { networks } from '../../consts/networks'
 import { LIFI_EXPLORER_URL } from '../../services/lifi/consts'
 import {
   AMBIRE_WALLET_TOKEN_ON_ETHEREUM,
@@ -661,9 +662,13 @@ export const calculateAmountWarnings = (
 
 const getLink = (route: SwapAndBridgeActiveRoute) => {
   const providerId = route.route ? route.route.providerId : route.serviceProviderId
-  return providerId === 'socket'
-    ? `${SOCKET_EXPLORER_URL}/tx/${route.userTxHash}`
-    : `${LIFI_EXPLORER_URL}/tx/${route.userTxHash}`
+  if (providerId === 'socket') return `${SOCKET_EXPLORER_URL}/tx/${route.userTxHash}`
+  // scan.li.fi doesn't index LiFi Intents bridges, fall back to the origin chain explorer.
+  if (providerId === 'lifi-intents') {
+    const network = networks.find((n) => n.chainId === BigInt(route.route?.fromChainId ?? 0))
+    if (network?.explorerUrl) return `${network.explorerUrl}/tx/${route.userTxHash}`
+  }
+  return `${LIFI_EXPLORER_URL}/tx/${route.userTxHash}`
 }
 
 const isTxnBridge = (txn: SwapAndBridgeUserTx): boolean => {
