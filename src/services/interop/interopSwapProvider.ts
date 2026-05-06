@@ -215,7 +215,7 @@ export class InteropSwapProvider implements SwapProvider {
       chainId: route.txData.chainId,
       txData: route.txData.data,
       txTarget: route.txData.to,
-      userTxIndex: 0,
+      userTxIndex: route.currentUserTxIndex,
       value: route.txData.value
     }
   }

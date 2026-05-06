@@ -11,6 +11,7 @@ import {
 import ERC20 from '../../../contracts/compiled/IERC20.json'
 import { MAX_UINT256 } from '../../consts/deploy'
 import { UPDATE_SWAP_AND_BRIDGE_QUOTE_INTERVAL } from '../../consts/intervals'
+import { networks } from '../../consts/networks'
 import { getTokenUsdAmount } from '../../controllers/signAccountOp/helper'
 import { Account, AccountOnchainState } from '../../interfaces/account'
 import { Fetch } from '../../interfaces/fetch'
@@ -25,7 +26,6 @@ import {
   SwapAndBridgeUserTx
 } from '../../interfaces/swapAndBridge'
 import { CallsUserRequest } from '../../interfaces/userRequest'
-import { networks } from '../../consts/networks'
 import { LIFI_EXPLORER_URL } from '../../services/lifi/consts'
 import {
   AMBIRE_WALLET_TOKEN_ON_ETHEREUM,
