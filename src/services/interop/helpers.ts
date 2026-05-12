@@ -100,7 +100,26 @@ export function mapQuoteToRoute(
     isOnlySwapRoute: isSameChain,
     fromAmount: input.amount,
     toAmount: output.amount,
-    userTxs: [],
+    // Populate userTxs with the fill ETA so the controller's status poller
+    // wakes up around the time the bridge should settle, not on the 60s
+    // UPDATE_SWAP_AND_BRIDGE_QUOTE_INTERVAL fallback used when userTxs is empty.
+    userTxs: [
+      {
+        userTxIndex: 0,
+        chainId: fromAsset.chainId,
+        fromAmount: input.amount,
+        fromAsset,
+        toAmount: output.amount,
+        toAsset,
+        minAmountOut: output.amount,
+        serviceTime: quote.eta ?? 0,
+        protocol: {
+          name: quote._providerId,
+          displayName: quote._providerId,
+          icon: ''
+        }
+      }
+    ],
     sender: params.userAddress,
     steps: [
       {
@@ -108,6 +127,7 @@ export function mapQuoteToRoute(
         fromAmount: input.amount,
         fromAsset,
         minAmountOut: output.amount,
+        serviceTime: quote.eta ?? 0,
         protocol: {
           name: quote._providerId,
           displayName: quote._providerId,
