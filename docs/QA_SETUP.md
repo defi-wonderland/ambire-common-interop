@@ -10,17 +10,25 @@ to test cross-chain swaps via LiFi Intents and Bungee.
 git clone https://github.com/AmbireTech/extension.git ambire-extension
 cd ambire-extension
 
-# 2. Replace the ambire-common submodule with our fork
+# 2. Pin the extension to a commit our fork is compatible with. The upstream
+# extension's main branch has moved past our fork's base — newer commits
+# import controllers (e.g. SurveyController) that don't exist in
+# ambire-common-interop yet, so the build fails with module-not-found errors.
+# Until the fork catches up, pin to the commit just before the survey
+# controller was wired into the extension.
+git checkout 4b006efc6
+
+# 3. Replace the ambire-common submodule with our fork
 rm -rf src/ambire-common
 git clone -b feat/interop-sdk https://github.com/defi-wonderland/ambire-common-interop.git src/ambire-common
 
-# 3. Add the SDK dep (modifies package.json/yarn.lock locally, do not commit)
+# 4. Add the SDK dep (modifies package.json/yarn.lock locally, do not commit)
 yarn add @wonderland/interop-cross-chain@0.10.0
 
-# 4. Set up .env (placeholder values, no real secrets)
+# 5. Set up .env (placeholder values, no real secrets)
 cp src/ambire-common/docs/qa.env .env
 
-# 5. Install and build
+# 6. Install and build
 yarn setup
 # Do not run `npm install` inside `src/ambire-common/` — the extension's
 # webpack reads from the root `node_modules`, and a nested install creates
