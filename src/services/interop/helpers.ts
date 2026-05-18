@@ -16,6 +16,12 @@ import {
 } from '../../interfaces/swapAndBridge'
 import { generateUuid } from '../../utils/uuid'
 
+// Ambire's UI keys the Bungee icon off the legacy 'socket' provider id.
+export const toAmbireProviderId = (sdkId: string): string => (sdkId === 'bungee' ? 'socket' : sdkId)
+
+export const toSdkProviderId = (ambireId: string): string =>
+  ambireId === 'socket' ? 'bungee' : ambireId
+
 export function toSwapAndBridgeToken(
   info: DiscoveredAssetInfo,
   chainId: number
@@ -85,7 +91,7 @@ export function mapQuoteToRoute(
   }
 
   return {
-    providerId: 'interop',
+    providerId: toAmbireProviderId(quote._providerId),
     routeId: quote.quoteId ?? generateUuid(),
     currentUserTxIndex: 0,
     fromChainId: params.fromChainId,
@@ -94,10 +100,26 @@ export function mapQuoteToRoute(
     isOnlySwapRoute: isSameChain,
     fromAmount: input.amount,
     toAmount: output.amount,
-    // Carries the SDK provider id through to getRouteStatus() via the
-    // bridge param of the route status check.
-    usedBridgeNames: [quote._providerId],
-    userTxs: [],
+    // Populate userTxs with the fill ETA so the controller's status poller
+    // wakes up around the time the bridge should settle, not on the 60s
+    // UPDATE_SWAP_AND_BRIDGE_QUOTE_INTERVAL fallback used when userTxs is empty.
+    userTxs: [
+      {
+        userTxIndex: 0,
+        chainId: fromAsset.chainId,
+        fromAmount: input.amount,
+        fromAsset,
+        toAmount: output.amount,
+        toAsset,
+        minAmountOut: output.amount,
+        serviceTime: quote.eta ?? 0,
+        protocol: {
+          name: quote._providerId,
+          displayName: quote._providerId,
+          icon: ''
+        }
+      }
+    ],
     sender: params.userAddress,
     steps: [
       {
@@ -105,6 +127,7 @@ export function mapQuoteToRoute(
         fromAmount: input.amount,
         fromAsset,
         minAmountOut: output.amount,
+        serviceTime: quote.eta ?? 0,
         protocol: {
           name: quote._providerId,
           displayName: quote._providerId,

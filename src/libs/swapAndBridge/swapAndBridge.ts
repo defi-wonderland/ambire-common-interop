@@ -11,6 +11,7 @@ import {
 import ERC20 from '../../../contracts/compiled/IERC20.json'
 import { MAX_UINT256 } from '../../consts/deploy'
 import { UPDATE_SWAP_AND_BRIDGE_QUOTE_INTERVAL } from '../../consts/intervals'
+import { networks } from '../../consts/networks'
 import { getTokenUsdAmount } from '../../controllers/signAccountOp/helper'
 import { Account, AccountOnchainState } from '../../interfaces/account'
 import { Fetch } from '../../interfaces/fetch'
@@ -661,9 +662,13 @@ export const calculateAmountWarnings = (
 
 const getLink = (route: SwapAndBridgeActiveRoute) => {
   const providerId = route.route ? route.route.providerId : route.serviceProviderId
-  return providerId === 'socket'
-    ? `${SOCKET_EXPLORER_URL}/tx/${route.userTxHash}`
-    : `${LIFI_EXPLORER_URL}/tx/${route.userTxHash}`
+  if (providerId === 'socket') return `${SOCKET_EXPLORER_URL}/tx/${route.userTxHash}`
+  // scan.li.fi doesn't index LiFi Intents bridges, fall back to the origin chain explorer.
+  if (providerId === 'lifi-intents') {
+    const network = networks.find((n) => n.chainId === BigInt(route.route?.fromChainId ?? 0))
+    if (network?.explorerUrl) return `${network.explorerUrl}/tx/${route.userTxHash}`
+  }
+  return `${LIFI_EXPLORER_URL}/tx/${route.userTxHash}`
 }
 
 const isTxnBridge = (txn: SwapAndBridgeUserTx): boolean => {

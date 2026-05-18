@@ -22,7 +22,7 @@ import {
   SwapAndBridgeToToken,
   SwapProvider
 } from '../../interfaces/swapAndBridge'
-import { mapQuoteToRoute, toSwapAndBridgeToken } from './helpers'
+import { mapQuoteToRoute, toSdkProviderId, toSwapAndBridgeToken } from './helpers'
 
 const ORDER_STATUS_TO_ROUTE_STATUS: Record<OrderStatus, SwapAndBridgeRouteStatus> = {
   [OrderStatus.Finalized]: 'completed',
@@ -191,9 +191,33 @@ export class InteropSwapProvider implements SwapProvider {
     }
   }
 
-  // Implemented in EFI-894
-  async startRoute(_route: SwapAndBridgeRoute): Promise<SwapAndBridgeSendTxRequest> {
-    throw new Error('Not implemented')
+  /**
+   * Reads the tx data and approval requirements that were attached during
+   * quote() (Socket pattern), so this is a pure mapping and never makes a
+   * second SDK call.
+   */
+  async startRoute(route: SwapAndBridgeRoute): Promise<SwapAndBridgeSendTxRequest> {
+    if (!route.txData) {
+      throw new SwapAndBridgeProviderApiError(
+        'Route is missing txData; signature-only quotes are rejected at quote time'
+      )
+    }
+    return {
+      activeRouteId: route.routeId,
+      approvalData: route.approvalData
+        ? {
+            allowanceTarget: route.approvalData.spenderAddress,
+            approvalTokenAddress: route.approvalData.tokenAddress,
+            minimumApprovalAmount: route.approvalData.amount,
+            owner: route.approvalData.userAddress
+          }
+        : null,
+      chainId: route.txData.chainId,
+      txData: route.txData.data,
+      txTarget: route.txData.to,
+      userTxIndex: route.currentUserTxIndex,
+      value: route.txData.value
+    }
   }
 
   async getRouteStatus({
@@ -210,7 +234,7 @@ export class InteropSwapProvider implements SwapProvider {
     try {
       const order = await this.aggregator.getOrderStatus({
         txHash: txHash as Hex,
-        providerId,
+        providerId: toSdkProviderId(providerId),
         originChainId: fromChainId
       })
       return ORDER_STATUS_TO_ROUTE_STATUS[order.status]
