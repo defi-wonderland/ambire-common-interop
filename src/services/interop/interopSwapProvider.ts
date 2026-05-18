@@ -53,6 +53,7 @@ export class InteropSwapProvider implements SwapProvider {
   private aggregator: Aggregator
 
   constructor() {
+    console.log('[interop] InteropSwapProvider constructor, building providers')
     const providers = [
       createCrossChainProvider(PROTOCOLS.LIFI_INTENTS, {
         orderServerUrl: LIFI_INTENTS_ORDER_SERVER_URL,
@@ -62,11 +63,13 @@ export class InteropSwapProvider implements SwapProvider {
         providerId: 'bungee'
       })
     ]
+    console.log('[interop] providers:', providers.map((p) => p.getProviderId()))
 
     this.aggregator = createAggregator({
       providers,
       trackerFactory: new OrderTrackerFactory({})
     })
+    console.log('[interop] aggregator created')
   }
 
   updateHealth(): void {
@@ -82,8 +85,11 @@ export class InteropSwapProvider implements SwapProvider {
    * Derived from the keys of the asset discovery response.
    */
   async getSupportedChains(): Promise<SwapAndBridgeSupportedChain[]> {
+    console.log('[interop] getSupportedChains: calling discoverAssets')
     const assets = await this.aggregator.discoverAssets()
-    const chains = Object.keys(assets.tokensByChain).map((chainId) => ({
+    const chainKeys = Object.keys(assets.tokensByChain)
+    console.log('[interop] getSupportedChains: discoverAssets returned chains', chainKeys)
+    const chains = chainKeys.map((chainId) => ({
       chainId: Number(chainId)
     }))
     this.supportedChains = chains
@@ -96,16 +102,32 @@ export class InteropSwapProvider implements SwapProvider {
     fromChainId: number
     toChainId: number
   }): Promise<SwapAndBridgeToToken[]> {
+    console.log('[interop] getToTokenList: toChainId', toChainId)
     const assets = await this.aggregator.discoverAssets()
     const addresses = assets.tokensByChain[toChainId] ?? []
     const metadata = assets.tokenMetadata[toChainId] ?? {}
+    console.log('[interop] getToTokenList: addresses count', addresses.length, 'for chain', toChainId)
 
-    return addresses.reduce<SwapAndBridgeToToken[]>((tokens, addr) => {
+    let droppedNoSymbol = 0
+    const result = addresses.reduce<SwapAndBridgeToToken[]>((tokens, addr) => {
       const info = metadata[addr]
-      if (!info?.symbol) return tokens
+      if (!info?.symbol) {
+        droppedNoSymbol += 1
+        return tokens
+      }
       tokens.push(toSwapAndBridgeToken(info, toChainId))
       return tokens
     }, [])
+    console.log(
+      '[interop] getToTokenList: returning',
+      result.length,
+      'tokens for chain',
+      toChainId,
+      '(dropped',
+      droppedNoSymbol,
+      'with empty symbol)'
+    )
+    return result
   }
 
   async getToken({
@@ -115,9 +137,18 @@ export class InteropSwapProvider implements SwapProvider {
     address: string
     chainId: number
   }): Promise<SwapAndBridgeToToken | null> {
+    console.log('[interop] getToken:', { chainId, address })
     const assets = await this.aggregator.discoverAssets()
     const info = assets.tokenMetadata[chainId]?.[address.toLowerCase()]
-    if (!info) return null
+    if (!info) {
+      console.log('[interop] getToken: NO info for', address, 'on chain', chainId)
+      return null
+    }
+    console.log('[interop] getToken: found', {
+      address: info.address,
+      symbol: info.symbol,
+      providers: info.providers
+    })
 
     return toSwapAndBridgeToken(info, chainId)
   }
@@ -127,6 +158,14 @@ export class InteropSwapProvider implements SwapProvider {
    * without a second API call (Socket pattern).
    */
   async quote(params: ProviderQuoteParams): Promise<SwapAndBridgeQuote> {
+    console.log('[interop] quote: request', {
+      fromChainId: params.fromChainId,
+      fromTokenAddress: params.fromTokenAddress,
+      toChainId: params.toChainId,
+      toTokenAddress: params.toTokenAddress,
+      fromAmount: params.fromAmount.toString(),
+      userAddress: params.userAddress
+    })
     const request: QuoteRequest = {
       user: params.userAddress,
       input: {
@@ -142,18 +181,28 @@ export class InteropSwapProvider implements SwapProvider {
 
     let result
     try {
+      console.log('[interop] quote: calling aggregator.getQuotes')
       result = await this.aggregator.getQuotes(request)
+      console.log('[interop] quote: aggregator returned', {
+        quoteCount: result.quotes.length,
+        errorCount: result.errors.length,
+        providers: result.quotes.map((q) => q._providerId),
+        errors: result.errors.map((e) => e.errorMsg ?? e.error?.message ?? 'unknown')
+      })
     } catch (e) {
+      console.log('[interop] quote: aggregator threw', e instanceof Error ? e.message : String(e))
       throw new SwapAndBridgeProviderApiError(e instanceof Error ? e.message : String(e))
     }
 
     const { quotes, errors } = result
     const [firstQuote, ...restQuotes] = quotes
     if (!firstQuote) {
+      console.log('[interop] quote: no quotes received, throwing')
       throw new SwapAndBridgeProviderApiError(errors[0]?.errorMsg ?? 'No routes available')
     }
 
     if (!params.fromAsset) {
+      console.log('[interop] quote: missing fromAsset, throwing')
       throw new SwapAndBridgeProviderApiError('Missing fromAsset for quote')
     }
 
@@ -174,11 +223,39 @@ export class InteropSwapProvider implements SwapProvider {
       decimals: 18
     }
 
-    const firstRoute = mapQuoteToRoute(firstQuote, fromAssetToken, toAssetToken, params)
+    let firstRoute
+    try {
+      firstRoute = mapQuoteToRoute(firstQuote, fromAssetToken, toAssetToken, params)
+      console.log('[interop] quote: firstRoute mapped from', firstQuote._providerId)
+    } catch (e) {
+      console.log(
+        '[interop] quote: mapQuoteToRoute THREW on firstQuote',
+        firstQuote._providerId,
+        e instanceof Error ? e.message : String(e)
+      )
+      throw e
+    }
     const routes = [
       firstRoute,
-      ...restQuotes.map((q) => mapQuoteToRoute(q, fromAssetToken, toAssetToken, params))
+      ...restQuotes.map((q) => {
+        try {
+          return mapQuoteToRoute(q, fromAssetToken, toAssetToken, params)
+        } catch (e) {
+          console.log(
+            '[interop] quote: mapQuoteToRoute THREW on restQuote',
+            q._providerId,
+            e instanceof Error ? e.message : String(e)
+          )
+          throw e
+        }
+      })
     ]
+    console.log(
+      '[interop] quote: returning',
+      routes.length,
+      'routes',
+      routes.map((r) => `${r.providerId}:${r.toAmount}`)
+    )
 
     return {
       fromAsset: fromAssetToken,

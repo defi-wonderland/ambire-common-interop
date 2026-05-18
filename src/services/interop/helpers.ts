@@ -45,6 +45,10 @@ function getSinglePreviewIO(quote: ExecutableQuote) {
   const [input, ...restIn] = quote.preview.inputs
   const [output, ...restOut] = quote.preview.outputs
   if (!input || !output || restIn.length !== 0 || restOut.length !== 0) {
+    console.log('[interop] mapQuoteToRoute: REJECT single-io check for', quote._providerId, {
+      inputs: quote.preview.inputs.length,
+      outputs: quote.preview.outputs.length
+    })
     throw new Error(
       `Ambire adapter expects single-input/output quotes, got ${quote.preview.inputs.length} inputs / ${quote.preview.outputs.length} outputs`
     )
@@ -58,26 +62,47 @@ export function mapQuoteToRoute(
   toAsset: SwapAndBridgeToToken,
   params: ProviderQuoteParams
 ): SwapAndBridgeRoute {
+  console.log('[interop] mapQuoteToRoute: entry for', quote._providerId, {
+    quoteId: quote.quoteId,
+    inputs: quote.preview.inputs.length,
+    outputs: quote.preview.outputs.length
+  })
   const { input, output } = getSinglePreviewIO(quote)
   const isSameChain = params.fromChainId === params.toChainId
 
   const sendSteps = getTransactionSteps(quote.order).filter((s) => !isApprovalStep(s))
   const sigSteps = getSignatureSteps(quote.order)
   const allowances = quote.order.checks?.allowances ?? []
+  console.log('[interop] mapQuoteToRoute:', quote._providerId, 'steps', {
+    sends: sendSteps.length,
+    sigs: sigSteps.length,
+    allowances: allowances.length
+  })
 
   const [txStep, ...restSends] = sendSteps
   const [allowance, ...restAllowances] = allowances
   if (restSends.length !== 0 || restAllowances.length !== 0) {
+    console.log(
+      '[interop] mapQuoteToRoute: REJECT multi-send/multi-allowance for',
+      quote._providerId
+    )
     throw new Error(
       `Ambire adapter expects at most 1 send tx and 1 allowance per quote, got ${sendSteps.length} sends / ${allowances.length} allowances`
     )
   }
   // SwapAndBridgeRoute has no field for signature payloads — drop signature-only quotes until EFI-894.
   if (sigSteps.length !== 0) {
+    console.log(
+      '[interop] mapQuoteToRoute: REJECT signature-based for',
+      quote._providerId,
+      'sigSteps',
+      sigSteps.length
+    )
     throw new Error(
       `Signature-based quotes are not supported yet (got ${sigSteps.length} signature steps from ${quote._providerId})`
     )
   }
+  console.log('[interop] mapQuoteToRoute: PASS', quote._providerId, 'building route')
 
   const toToken: LiFiToken = {
     address: toAsset.address,
