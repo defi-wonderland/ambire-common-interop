@@ -22,6 +22,11 @@ cp src/ambire-common/docs/qa.env .env
 
 # 5. Install and build
 yarn setup
+# Do not run `npm install` inside `src/ambire-common/` — the extension's
+# webpack reads from the root `node_modules`, and a nested install creates
+# duplicate packages that confuse LavaMoat's resolver. If you ever did,
+# clean it up before building:
+rm -rf src/ambire-common/node_modules
 # `:generate-policy` regenerates the LavaMoat allowlist to include the new
 # SDK deps. Without it, the extension throws "Policy does not allow importing"
 # at runtime.
