@@ -19,7 +19,7 @@
     "@metamask/eth-sig-util": "^8.2.0",
     "@safe-global/api-kit": "^4.0.1",
     "@safe-global/protocol-kit": "^6.1.2",
-    "@wonderland/interop-cross-chain": "0.10.0",
+    "@wonderland/interop-cross-chain": "0.11.0",
     "aes-js": "^3.1.2",
     "dotenv": "^16.3.1",
     "eth-crypto": "^2.6.0",
