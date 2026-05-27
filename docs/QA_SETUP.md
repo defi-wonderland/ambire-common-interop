@@ -15,7 +15,7 @@ rm -rf src/ambire-common
 git clone -b feat/interop-sdk https://github.com/defi-wonderland/ambire-common-interop.git src/ambire-common
 
 # 3. Add the SDK dep (modifies package.json/yarn.lock locally, do not commit)
-yarn add @wonderland/interop-cross-chain@0.10.0
+yarn add @wonderland/interop-cross-chain@0.11.0
 
 # 4. Set up .env (placeholder values, no real secrets)
 cp src/ambire-common/docs/qa.env .env
